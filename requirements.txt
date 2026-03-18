@@ -1,0 +1,2 @@
+python-binance>=1.0.19,<2.0.0
+python-dotenv>=1.0.0,<2.0.0
