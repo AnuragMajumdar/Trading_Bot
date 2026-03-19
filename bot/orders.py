@@ -8,6 +8,7 @@ from binance.enums import (
     TIME_IN_FORCE_GTC,
     FUTURE_ORDER_TYPE_MARKET,
     FUTURE_ORDER_TYPE_LIMIT,
+    FUTURE_ORDER_TYPE_STOP,
 )
 from binance.exceptions import BinanceAPIException, BinanceRequestException
 
@@ -121,5 +122,42 @@ def place_limit_order(
     logger.info(
         "LIMIT order accepted — orderId=%s, symbol=%s, side=%s, qty=%s, price=%s, status=%s",
         response.get("orderId"), symbol, side, quantity, price, response.get("status"),
+    )
+    return response
+
+
+def place_stop_limit_order(
+    client: Client, symbol: str, side: str, quantity: str, price: str, stop_price: str
+) -> dict:
+    """
+    Place a STOP-LIMIT (STOP) GTC order on Binance Futures Testnet.
+
+    - stop_price: the trigger price — when market hits this, the limit order activates
+    - price: the limit price at which the order executes after triggering
+
+    Typical usage:
+      SELL stop-loss: stop_price < current price, price slightly below stop_price
+      BUY breakout:   stop_price > current price, price slightly above stop_price
+    """
+    desc = f"STOP_LIMIT {side} {quantity} {symbol} @ {price} (trigger: {stop_price})"
+    logger.info("Placing %s", desc)
+
+    def _do_order():
+        return client.futures_create_order(
+            symbol=symbol,
+            side=SIDE_MAP[side],
+            type=FUTURE_ORDER_TYPE_STOP,
+            quantity=quantity,
+            price=price,
+            stopPrice=stop_price,
+            timeInForce=TIME_IN_FORCE_GTC,
+        )
+
+    response = _execute_with_retry(_do_order, desc)
+    logger.info(
+        "STOP_LIMIT order accepted — orderId=%s, symbol=%s, side=%s, qty=%s, "
+        "price=%s, stopPrice=%s, status=%s",
+        response.get("orderId"), symbol, side, quantity, price, stop_price,
+        response.get("status"),
     )
     return response

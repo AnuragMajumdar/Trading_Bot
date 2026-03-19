@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 logger = logging.getLogger("trading_bot")
 
 VALID_SIDES = ("BUY", "SELL")
-VALID_ORDER_TYPES = ("MARKET", "LIMIT")
+VALID_ORDER_TYPES = ("MARKET", "LIMIT", "STOP_LIMIT")
 KNOWN_QUOTE_ASSETS = ("USDT", "BUSD", "BTC", "ETH", "BNB")
 MIN_SYMBOL_LENGTH = 5
 
@@ -21,14 +21,22 @@ def _normalize_decimal(value: Decimal) -> str:
     Strips trailing zeros and avoids scientific notation.
     e.g. Decimal('0.00100000') -> '0.001', Decimal('3500.00') -> '3500'
     """
-    # Remove trailing zeros: 3500.00 -> 3.5E+3, 0.00100 -> 0.001
     normalized = value.normalize()
     text = str(normalized)
-    # If normalize() produced scientific notation, convert back to plain decimal
     if "E" in text or "e" in text:
-        # Use the normalized value but format without exponent
         text = f"{normalized:f}"
     return text
+
+
+def _parse_positive_decimal(raw: str, field_name: str) -> Decimal:
+    """Parse a string into a positive Decimal or raise ValidationError."""
+    try:
+        value = Decimal(raw)
+    except (InvalidOperation, TypeError, ValueError):
+        raise ValidationError(f"Invalid {field_name}: '{raw}'. Must be a positive number.")
+    if value <= 0:
+        raise ValidationError(f"{field_name.capitalize()} must be positive, got {value}.")
+    return value
 
 
 def validate_order_params(
@@ -37,6 +45,7 @@ def validate_order_params(
     order_type: str,
     quantity: str,
     price: str | None = None,
+    stop_price: str | None = None,
 ) -> dict:
     """
     Validate and normalize order parameters.
@@ -67,25 +76,22 @@ def validate_order_params(
     if order_type not in VALID_ORDER_TYPES:
         raise ValidationError(f"Invalid order type: '{order_type}'. Must be one of {VALID_ORDER_TYPES}.")
 
-    # Quantity: parse with Decimal for precision, then normalize for Binance
-    try:
-        qty = Decimal(quantity)
-    except (InvalidOperation, TypeError, ValueError):
-        raise ValidationError(f"Invalid quantity: '{quantity}'. Must be a positive number.")
-    if qty <= 0:
-        raise ValidationError(f"Quantity must be positive, got {qty}.")
+    # Quantity
+    qty = _parse_positive_decimal(quantity, "quantity")
 
-    # Price: required for LIMIT orders
+    # Price: required for LIMIT and STOP_LIMIT orders
     cleaned_price = None
-    if order_type == "LIMIT":
+    if order_type in ("LIMIT", "STOP_LIMIT"):
         if price is None:
-            raise ValidationError("Price is required for LIMIT orders.")
-        try:
-            cleaned_price = Decimal(price)
-        except (InvalidOperation, TypeError, ValueError):
-            raise ValidationError(f"Invalid price: '{price}'. Must be a positive number.")
-        if cleaned_price <= 0:
-            raise ValidationError(f"Price must be positive, got {cleaned_price}.")
+            raise ValidationError(f"Price is required for {order_type} orders.")
+        cleaned_price = _parse_positive_decimal(price, "price")
+
+    # Stop price: required only for STOP_LIMIT orders
+    cleaned_stop_price = None
+    if order_type == "STOP_LIMIT":
+        if stop_price is None:
+            raise ValidationError("Stop price (--stop-price) is required for STOP_LIMIT orders.")
+        cleaned_stop_price = _parse_positive_decimal(stop_price, "stop price")
 
     params = {
         "symbol": symbol,
@@ -95,6 +101,8 @@ def validate_order_params(
     }
     if cleaned_price is not None:
         params["price"] = _normalize_decimal(cleaned_price)
+    if cleaned_stop_price is not None:
+        params["stop_price"] = _normalize_decimal(cleaned_stop_price)
 
     logger.debug("Validated order params: %s", params)
     return params
