@@ -171,6 +171,58 @@ python cli.py stop-limit --help
   Stop Price: 90000.00
 ```
 
+### Successful STOP-LIMIT Order (Full Terminal Output)
+
+```
+(.venv) anuragmajumdar@Anurags-MacBook-Air-2 trading_bot % python cli.py stop-limit --symbol BTCUSDT --side BUY --quantity 0.002 --stop-price 90000 --price 90500
+2026-03-19 15:04:52 | INFO     | trading_bot | Binance Futures Testnet client initialized. Server time: 1773912892477
+2026-03-19 15:04:52 | INFO     | trading_bot | Placing STOP_LIMIT BUY 0.002 BTCUSDT @ 90500 (trigger: 90000)
+2026-03-19 15:04:52 | INFO     | trading_bot | STOP_LIMIT order accepted — orderId=None, symbol=BTCUSDT, side=BUY, qty=0.002, price=90500, stopPrice=90000, status=None
+2026-03-19 15:04:52 | INFO     | trading_bot | Order response:
+{
+  "algoId": 1000000029422547,
+  "clientAlgoId": "x-Cb7ytekJ391581aecff016af49a0a8",
+  "algoType": "CONDITIONAL",
+  "orderType": "STOP",
+  "symbol": "BTCUSDT",
+  "side": "BUY",
+  "positionSide": "BOTH",
+  "timeInForce": "GTC",
+  "quantity": "0.002",
+  "algoStatus": "NEW",
+  "triggerPrice": "90000.00",
+  "price": "90500.00",
+  ...
+}
+
+  [SUCCESS] STOP_LIMIT order placed
+  Order ID : 1000000029422547
+  Symbol   : BTCUSDT
+  Side     : BUY
+  Quantity : 0.002
+  Status   : NEW
+  Price    : 90500.00
+  Stop Price: 90000.00
+```
+
+### MARKET BUY — ETHUSDT (Screenshot)
+
+![MARKET BUY ETHUSDT](images/market_buy_ethusdt.png)
+
+### MARKET SELL — ETHUSDT (Screenshot)
+
+![MARKET SELL ETHUSDT](images/market_sell_ethusdt.png)
+
+### Failed Validation — Invalid Symbol (Screenshot)
+
+![Validation Failure](images/validation_failure.png)
+
+### Live Positions on Binance Futures Testnet (Screenshot)
+
+All positions opened via the bot, visible on the testnet web UI under **Positions**:
+
+![Live Positions](images/positions.png)
+
 ### Failed Validation
 
 ```
