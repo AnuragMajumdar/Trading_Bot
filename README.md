@@ -1,6 +1,6 @@
 # Binance Futures Testnet Trading Bot
 
-A production-quality CLI trading bot for placing **MARKET** and **LIMIT** orders on the Binance Futures Testnet (USDT-M). Built with Python and the `python-binance` library.
+A production-quality CLI trading bot for placing **MARKET**, **LIMIT**, and **STOP-LIMIT** orders on the Binance Futures Testnet (USDT-M). Built with Python and the `python-binance` library.
 
 > **This bot connects exclusively to the Binance Futures Testnet. No real funds are ever at risk.**
 
@@ -10,8 +10,9 @@ A production-quality CLI trading bot for placing **MARKET** and **LIMIT** orders
 
 - **MARKET orders** — execute immediately at the current market price
 - **LIMIT orders** — place at a specific price with GTC (Good Till Cancelled) time-in-force
-- **BUY and SELL** support for both order types
-- **Input validation** — symbol format, quote asset suffix, quantity/price parsing via `Decimal`
+- **STOP-LIMIT orders** — conditional orders that trigger at a stop price and execute at a limit price (for stop-losses and breakout entries)
+- **BUY and SELL** support for all order types
+- **Input validation** — symbol format, quote asset suffix, quantity/price/stop-price parsing via `Decimal`
 - **Automatic retry** — transient network failures retry up to 3 times with exponential backoff
 - **Rotating file logs** — all activity logged with timestamps and severity levels
 - **Structured CLI output** — clear success/failure messages in the terminal
@@ -32,6 +33,7 @@ trading_bot/
 ├── cli.py                   # CLI entry point (argparse)
 ├── requirements.txt         # Python dependencies
 ├── .env                     # API keys (you create this — not committed)
+├── .gitignore               # Excludes .env, logs, __pycache__, .venv
 └── logs/
     └── trading_bot.log      # Auto-created at first run
 ```
@@ -80,7 +82,7 @@ BINANCE_API_SECRET=your_secret_key_here
 
 Replace the placeholder values with the keys from Step 1.
 
-> **Do not commit `.env` to version control.** Add it to your `.gitignore`.
+> **Do not commit `.env` to version control.** It is already in `.gitignore`.
 
 ---
 
@@ -91,7 +93,7 @@ All commands are run from the `trading_bot/` directory with the virtual environm
 ### Place a MARKET Order
 
 ```bash
-python cli.py market --symbol BTCUSDT --side BUY --quantity 0.001
+python cli.py market --symbol BTCUSDT --side BUY --quantity 0.002
 ```
 
 ### Place a LIMIT Order
@@ -100,22 +102,40 @@ python cli.py market --symbol BTCUSDT --side BUY --quantity 0.001
 python cli.py limit --symbol ETHUSDT --side SELL --quantity 0.05 --price 3500.00
 ```
 
+### Place a STOP-LIMIT Order
+
+A stop-limit order activates when the market reaches the **stop price**, then places a limit order at the **limit price**.
+
+```bash
+# Stop-loss: if BTC drops to 78000, sell at 77500
+python cli.py stop-limit --symbol BTCUSDT --side SELL --quantity 0.002 --stop-price 78000 --price 77500
+
+# Breakout buy: if BTC rises to 90000, buy at 90500
+python cli.py stop-limit --symbol BTCUSDT --side BUY --quantity 0.002 --stop-price 90000 --price 90500
+```
+
+> **Important:** The stop price must not cause an immediate trigger. For SELL stop-limits, set `--stop-price` **below** the current market price. For BUY stop-limits, set it **above** the current price. Otherwise Binance returns error `-2021: Order would immediately trigger`.
+
 ### CLI Help
 
 ```bash
 python cli.py --help
 python cli.py market --help
 python cli.py limit --help
+python cli.py stop-limit --help
 ```
 
 ### Argument Reference
 
-| Argument     | Required          | Description                          |
-|-------------|-------------------|--------------------------------------|
-| `--symbol`  | Yes               | Trading pair (e.g. `BTCUSDT`)        |
-| `--side`    | Yes               | `BUY` or `SELL`                      |
-| `--quantity`| Yes               | Order quantity (e.g. `0.001`)        |
-| `--price`   | LIMIT orders only | Limit price (e.g. `65000.00`)        |
+| Argument       | Required                | Description                                |
+|---------------|-------------------------|--------------------------------------------|
+| `--symbol`    | Yes                     | Trading pair (e.g. `BTCUSDT`)              |
+| `--side`      | Yes                     | `BUY` or `SELL`                            |
+| `--quantity`  | Yes                     | Order quantity (e.g. `0.002`)              |
+| `--price`     | LIMIT & STOP-LIMIT only | Limit price (e.g. `65000.00`)              |
+| `--stop-price`| STOP-LIMIT only         | Trigger price (e.g. `78000.00`)            |
+
+> **Minimum notional:** Every order must have quantity × price ≥ $100. For MARKET orders, this is quantity × current market price.
 
 ---
 
@@ -124,17 +144,31 @@ python cli.py limit --help
 ### Successful MARKET Order
 
 ```
-2026-03-18 19:50:01 | INFO     | trading_bot | Binance Futures Testnet client initialized. Server time: 1710791401000
-2026-03-18 19:50:01 | INFO     | trading_bot | Placing MARKET BUY 0.001 BTCUSDT
-2026-03-18 19:50:02 | INFO     | trading_bot | MARKET order filled — orderId=123456, symbol=BTCUSDT, side=BUY, qty=0.001, status=FILLED
+2026-03-18 20:59:09 | INFO     | trading_bot | Binance Futures Testnet client initialized. Server time: 1773847749241
+2026-03-18 20:59:09 | INFO     | trading_bot | Placing MARKET BUY 0.002 BTCUSDT
+2026-03-18 20:59:09 | INFO     | trading_bot | MARKET order filled — orderId=12863255495, symbol=BTCUSDT, side=BUY, qty=0.002, status=NEW
 
   [SUCCESS] MARKET order placed
-  Order ID : 123456
+  Order ID : 12863255495
   Symbol   : BTCUSDT
   Side     : BUY
-  Quantity : 0.001
-  Status   : FILLED
-  Avg Price: 84520.50
+  Quantity : 0.002
+  Status   : NEW
+```
+
+### Successful STOP-LIMIT Order
+
+```
+2026-03-19 15:03:52 | INFO     | trading_bot | Placing STOP_LIMIT BUY 0.002 BTCUSDT @ 90500 (trigger: 90000)
+
+  [SUCCESS] STOP_LIMIT order placed
+  Order ID : 1000000029422139
+  Symbol   : BTCUSDT
+  Side     : BUY
+  Quantity : 0.002
+  Status   : NEW
+  Price    : 90500.00
+  Stop Price: 90000.00
 ```
 
 ### Failed Validation
@@ -148,7 +182,7 @@ python cli.py limit --help
 
 ```
   [FAILED] Order placement
-  Error: Binance API error: [-1121] Invalid symbol.
+  Error: Binance API error: [-2021] Order would immediately trigger.
 ```
 
 ---
@@ -168,8 +202,9 @@ python cli.py limit --help
 
 1. **Testnet only** — the bot is hardcoded to use `https://testnet.binancefuture.com`. It will never connect to the live Binance API.
 2. **USDT-M Futures** — designed for USDT-margined futures contracts (e.g. `BTCUSDT`, `ETHUSDT`).
-3. **GTC time-in-force** — LIMIT orders use Good Till Cancelled. They remain open until filled or manually cancelled.
+3. **GTC time-in-force** — LIMIT and STOP-LIMIT orders use Good Till Cancelled. They remain open until filled or manually cancelled.
 4. **No leverage management** — the bot places orders using whatever leverage is currently set on your testnet account (default 20x). Adjust leverage via the testnet web UI.
 5. **Symbol validation** — accepted quote assets are `USDT`, `BUSD`, `BTC`, `ETH`, and `BNB`.
 6. **Python 3.10+** — uses `str | None` union syntax in type hints.
 7. **Single orders** — the bot places one order per CLI invocation. It is not a continuously running strategy bot.
+8. **Minimum notional** — Binance requires each order's notional value (quantity × price) to be at least $100.
